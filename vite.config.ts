@@ -13,6 +13,6 @@ export default defineConfig({
     },
   },
   preview: {
-    allowedHosts: ['https://vmi2921849.contaboserver.net/'],
+    allowedHosts: ['vmi2921849.contaboserver.net'],
   },
 })
