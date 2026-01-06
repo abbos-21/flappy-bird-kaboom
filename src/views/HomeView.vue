@@ -12,65 +12,65 @@ onMounted(() => {
       canvas: canvas.value,
     })
 
-    loadSprite('bean', '/redbird-midflap.png')
-    loadSprite('background-day', '/background-day.png')
-    loadSprite('pipe-top', '/pipe-green-top.png') // your top pipe image
-    loadSprite('pipe-bottom', '/pipe-green-bottom.png') // your bottom pipe image
-    loadSprite('pipe', '/pipe-green.png')
-    loadSound('score', '/examples/sounds/score.mp3')
-    loadSound('wooosh', '/examples/sounds/wooosh.mp3')
-    loadSound('hit', '/examples/sounds/hit.mp3')
+    // Load all three bird animation frames
+    loadSprite('bird-down', '/redbird-downflap.png')
+    loadSprite('bird-mid', '/redbird-midflap.png')
+    loadSprite('bird-up', '/redbird-upflap.png')
 
-    // define gravity
+    loadSprite('background-day', '/background-day.png')
+    loadSound('score', '/point.ogg')
+    loadSound('wooosh', '/swoosh.ogg')
+    loadSound('hit', '/hit.ogg')
+
     setGravity(3200)
 
     scene('game', () => {
-      const PIPE_OPEN = 240
+      const PIPE_OPEN = 180
       const PIPE_MIN = 60
       const JUMP_FORCE = 800
       const SPEED = 320
       const CEILING = -60
 
-      // Create repeating background without distortion
-      const bgOriginalWidth = 288 // Standard Flappy Bird background width
-      const bgOriginalHeight = 512 // Standard height
-
+      const bgOriginalWidth = 288
+      const bgOriginalHeight = 512
       const bgScaleY = height() / bgOriginalHeight
-      const bgScaledWidth = bgOriginalWidth * bgScaleY // Width after Y scaling (preserves aspect)
-
-      const numBackgrounds = Math.ceil(width() / bgScaledWidth) + 1 // Enough to cover + extra for parallax if needed
+      const bgScaledWidth = bgOriginalWidth * bgScaleY
+      const numBackgrounds = Math.ceil(width() / bgScaledWidth) + 1
 
       for (let i = 0; i < numBackgrounds; i++) {
-        add([
-          sprite('background-day'),
-          pos(i * bgScaledWidth, 0),
-          scale(bgScaleY), // Uniform scale based on Y fit → no distortion
-          fixed(),
-          z(-1),
-        ])
+        add([sprite('background-day'), pos(i * bgScaledWidth, 0), scale(bgScaleY), fixed(), z(-1)])
       }
 
-      // a game object consists of a list of components and tags
       const bean = add([
-        // sprite() means it's drawn with a sprite of name "bean" (defined above in 'loadSprite')
-        sprite('bean'),
-        // give it a position
+        sprite('bird-mid'), // Start with mid frame
         pos(width() / 4, 0),
-        // give it a collider
         area(),
-        // body component enables it to fall and jump in a gravity world
         body(),
+        {
+          animFrame: 0,
+          animTimer: 0,
+        },
       ])
 
-      // check for fall death
+      // Animate bird wings
+      const ANIM_SPEED = 0.1 // Seconds per frame
+      const birdFrames = ['bird-down', 'bird-mid', 'bird-up', 'bird-mid']
+
       bean.onUpdate(() => {
+        // Wing animation
+        bean.animTimer += dt()
+        if (bean.animTimer >= ANIM_SPEED) {
+          bean.animTimer = 0
+          bean.animFrame = (bean.animFrame + 1) % birdFrames.length
+          bean.use(sprite(birdFrames[bean.animFrame]!))
+        }
+
+        // Death check
         if (bean.pos.y >= height() || bean.pos.y <= CEILING) {
-          // switch to "lose" scene
           go('lose', score)
         }
       })
 
-      // jump
       onKeyPress('space', () => {
         bean.jump(JUMP_FORCE)
         play('wooosh')
@@ -81,14 +81,12 @@ onMounted(() => {
         play('wooosh')
       })
 
-      // mobile
       onClick(() => {
         bean.jump(JUMP_FORCE)
         play('wooosh')
       })
 
       function spawnPipe() {
-        // calculate pipe positions
         const h1 = rand(PIPE_MIN, height() - PIPE_MIN - PIPE_OPEN)
         const h2 = height() - h1 - PIPE_OPEN
 
@@ -100,7 +98,6 @@ onMounted(() => {
           area(),
           move(LEFT, SPEED),
           offscreen({ destroy: true }),
-          // give it tags to easier define behaviors see below
           'pipe',
         ])
 
@@ -112,37 +109,30 @@ onMounted(() => {
           area(),
           move(LEFT, SPEED),
           offscreen({ destroy: true }),
-          // give it tags to easier define behaviors see below
           'pipe',
-          // raw obj just assigns every field to the game obj
           { passed: false },
         ])
       }
 
-      // callback when bean onCollide with objects with tag "pipe"
       bean.onCollide('pipe', () => {
         go('lose', score)
         play('hit')
         addKaboom(bean.pos)
       })
 
-      // per frame event for all objects with tag 'pipe'
       onUpdate('pipe', (p) => {
-        // check if bean passed the pipe
         if (p.pos.x + p.width <= bean.pos.x && p.passed === false) {
           addScore()
           p.passed = true
         }
       })
 
-      // spawn a pipe every 1 sec
       loop(1, () => {
         spawnPipe()
       })
 
       let score = 0
 
-      // display score
       const scoreLabel = add([
         text(score.toString()),
         anchor('center'),
@@ -159,28 +149,18 @@ onMounted(() => {
     })
 
     scene('lose', (score) => {
-      // Create repeating background without distortion
-      const bgOriginalWidth = 288 // Standard Flappy Bird background width
-      const bgOriginalHeight = 512 // Standard height
-
+      const bgOriginalWidth = 288
+      const bgOriginalHeight = 512
       const bgScaleY = height() / bgOriginalHeight
-      const bgScaledWidth = bgOriginalWidth * bgScaleY // Width after Y scaling (preserves aspect)
-
-      const numBackgrounds = Math.ceil(width() / bgScaledWidth) + 1 // Enough to cover + extra for parallax if needed
+      const bgScaledWidth = bgOriginalWidth * bgScaleY
+      const numBackgrounds = Math.ceil(width() / bgScaledWidth) + 1
 
       for (let i = 0; i < numBackgrounds; i++) {
-        add([
-          sprite('background-day'),
-          pos(i * bgScaledWidth, 0),
-          scale(bgScaleY), // Uniform scale based on Y fit → no distortion
-          fixed(),
-          z(-1),
-        ])
+        add([sprite('background-day'), pos(i * bgScaledWidth, 0), scale(bgScaleY), fixed(), z(-1)])
       }
 
-      add([sprite('bean'), pos(width() / 2, height() / 2 - 108), scale(3), anchor('center')])
+      add([sprite('bird-mid'), pos(width() / 2, height() / 2 - 108), scale(3), anchor('center')])
 
-      // display score
       add([
         text(score ?? 'Welcome'),
         pos(width() / 2, height() / 2 + 108),
@@ -188,7 +168,6 @@ onMounted(() => {
         anchor('center'),
       ])
 
-      // go back to game with space is pressed
       onKeyPress('space', () => go('game'))
       onClick(() => go('game'))
     })
