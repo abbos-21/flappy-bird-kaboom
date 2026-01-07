@@ -18,6 +18,7 @@ onMounted(() => {
     loadSprite('bird-up', '/redbird-upflap.png')
 
     loadSprite('background-day', '/background-day.png')
+    loadSprite('coin', '/coin.png')
     loadSound('score', '/point.ogg')
     loadSound('wooosh', '/swoosh.ogg')
     loadSound('hit', '/hit.ogg')
@@ -89,28 +90,60 @@ onMounted(() => {
       function spawnPipe() {
         const h1 = rand(PIPE_MIN, height() - PIPE_MIN - PIPE_OPEN)
         const h2 = height() - h1 - PIPE_OPEN
+        const CAP_W = 52
+        const CAP_H = 24
+        const BODY_W = 48
 
-        add([
+        // --- TOP PIPE ---
+        const pipeTop = add([
           pos(width(), 0),
-          rect(52, h1),
-          color(0, 183, 219),
-          outline(1),
-          area(),
+          area({ shape: new Rect(vec2(0, 0), CAP_W, h1) }),
           move(LEFT, SPEED),
           offscreen({ destroy: true }),
           'pipe',
         ])
 
-        add([
-          pos(width(), h1 + PIPE_OPEN),
-          rect(52, h2),
+        // Top Body (Centered)
+        pipeTop.add([
+          rect(BODY_W, h1 - CAP_H),
+          pos(2, 0),
           color(0, 183, 219),
-          outline(1),
-          area(),
+          outline(1, rgb(84, 56, 71)),
+        ])
+
+        // Top Cap (At the bottom of the top pipe)
+        pipeTop.add([
+          rect(CAP_W, CAP_H),
+          pos(0, h1 - CAP_H),
+          color(0, 183, 219),
+          outline(1, rgb(84, 56, 71)),
+        ])
+
+        // --- BOTTOM PIPE ---
+        const pipeBottom = add([
+          pos(width(), h1 + PIPE_OPEN),
+          // Area covers the full width of the cap and total height
+          area({ shape: new Rect(vec2(0, 0), CAP_W, CAP_H + h2) }),
           move(LEFT, SPEED),
           offscreen({ destroy: true }),
           'pipe',
           { passed: false },
+        ])
+
+        // Bottom Cap
+        pipeBottom.add([
+          rect(CAP_W, CAP_H),
+          pos(0, 0),
+          color(0, 183, 219),
+          outline(1, rgb(84, 56, 71)),
+        ])
+
+        // Bottom Body (Centered: (52 - 48) / 2 = 2px offset)
+        pipeBottom.add([
+          rect(BODY_W, h2),
+          pos(2, CAP_H),
+          color(0, 183, 219),
+          outline(1, rgb(84, 56, 71)),
         ])
       }
 
@@ -120,10 +153,21 @@ onMounted(() => {
         addKaboom(bean.pos)
       })
 
+      // onUpdate('pipe', (p) => {
+      //   if (p.pos.x + p.width <= bean.pos.x && p.passed === false) {
+      //     addScore()
+      //     p.passed = true
+      //   }
+      // })
+
       onUpdate('pipe', (p) => {
-        if (p.pos.x + p.width <= bean.pos.x && p.passed === false) {
-          addScore()
-          p.passed = true
+        // Only check pipes that have the 'passed' property (the bottom pipes)
+        if (p.passed === false) {
+          // Use the actual constant CAP_W (52) since p.width is undefined
+          if (p.pos.x + 52 <= bean.pos.x) {
+            addScore()
+            p.passed = true
+          }
         }
       })
 
