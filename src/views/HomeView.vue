@@ -1,240 +1,318 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import kaboom from 'kaboom'
+import { useAdsgram } from '@adsgram/vue'
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 
 onMounted(() => {
-  if (canvas.value) {
-    // Calculate the scale to fit the width or height
-    // const kWidth = 360
-    // const kHeight = 640
+  if (!canvas.value) return
 
-    // const scaleFactor = Math.min(window.innerWidth / kWidth, window.innerHeight / kHeight)
+  kaboom({
+    width: 360,
+    height: 640,
+    letterbox: true,
+    canvas: canvas.value,
+    background: [0, 0, 0],
+  })
 
-    // kaboom({
-    //   width: kWidth,
-    //   height: kHeight,
-    //   scale: scaleFactor, // <--- Scale based on window size
-    //   canvas: canvas.value,
-    // })
+  // --- Assets Loading ---
+  loadSprite('bird-down', '/bluebird-downflap.png')
+  loadSprite('bird-mid', '/bluebird-midflap.png')
+  loadSprite('bird-up', '/bluebird-upflap.png')
+  loadSprite('background-day', '/background-day.png')
+  loadSprite('pipe', '/pipe-green.png')
+  loadSprite('base', '/base.png')
 
-    const kWidth = 360
-    const kHeight = 640
+  loadSound('score', '/point.ogg')
+  loadSound('wooosh', '/swoosh.ogg')
+  loadSound('hit', '/hit.ogg')
 
-    // REMOVE THIS:
-    // const scaleFactor = Math.min(window.innerWidth / kWidth, window.innerHeight / kHeight)
+  // --- Helpers ---
+  function createTiledBackground() {
+    const bgWidth = 288
+    const bgHeight = 512
+    const bgScale = height() / bgHeight
+    const numBgs = Math.ceil(width() / (bgWidth * bgScale)) + 1
 
-    kaboom({
-      width: kWidth,
-      height: kHeight,
-      letterbox: true, // <--- This scales the canvas to fit window automatically
-      canvas: canvas.value,
-      // Optional: Set background to black to hide "letterbox" bars visually
-      background: [0, 0, 0],
+    for (let i = 0; i < numBgs; i++) {
+      add([
+        sprite('background-day'),
+        pos(i * (bgWidth * bgScale), 0),
+        scale(bgScale),
+        fixed(),
+        z(-1),
+      ])
+    }
+  }
+
+  // --- Game Scene ---
+  scene('game', () => {
+    setGravity(3200)
+    let score = 0
+    let currentSpeed = 320
+    let gameStarted = false // Add this flag
+
+    // Configuration
+    const JUMP_FORCE = 800
+    const PIPE_OPEN = 180
+    const PIPE_HEIGHT = 320
+    const FLOOR_HEIGHT = 112
+    const CEILING = -60
+    const MAX_SPEED = 640
+    const SPEED_ACCEL = 8
+    const ANIM_SPEED = 0.1
+    const birdFrames = ['bird-down', 'bird-mid', 'bird-up', 'bird-mid']
+
+    createTiledBackground()
+
+    // UI
+    const scoreLabel = add([text('0'), pos(width() / 2, 80), anchor('center'), fixed(), z(100)])
+
+    // Add start prompt
+    const startPrompt = add([
+      text('Press Space or Click to Start', { size: 20 }),
+      pos(width() / 2, height() / 2 + 100),
+      anchor('center'),
+      fixed(),
+      z(100),
+    ])
+
+    // Player
+    const bird = add([
+      sprite('bird-mid'),
+      pos(width() / 4, (height() - FLOOR_HEIGHT) / 2),
+      area(),
+      body(),
+      z(20),
+      {
+        animFrame: 0,
+        animTimer: 0,
+      },
+    ])
+
+    // Disable gravity until game starts
+    bird.paused = true
+
+    // Scrolling Floor (Base)
+    const base1 = add([
+      sprite('base'),
+      pos(0, height() - FLOOR_HEIGHT),
+      area(),
+      body({ isStatic: true }),
+      z(10),
+      'base',
+    ])
+
+    const base2 = add([
+      sprite('base'),
+      pos(base1.width, height() - FLOOR_HEIGHT),
+      area(),
+      body({ isStatic: true }),
+      z(10),
+      'base',
+    ])
+
+    // Pipes Logic
+    function spawnPipe() {
+      const minPipePos = height() - FLOOR_HEIGHT - PIPE_HEIGHT - PIPE_OPEN / 2
+      const maxPipePos = PIPE_HEIGHT
+      const pipePos = rand(minPipePos, maxPipePos)
+
+      add([
+        sprite('pipe', { flipY: true }),
+        pos(width(), pipePos - PIPE_HEIGHT),
+        area(),
+        move(LEFT, currentSpeed),
+        offscreen({ destroy: true }),
+        z(0),
+        'pipe',
+      ])
+
+      add([
+        sprite('pipe'),
+        pos(width(), pipePos + PIPE_OPEN),
+        area(),
+        move(LEFT, currentSpeed),
+        z(0),
+        'pipe',
+        { passed: false },
+      ])
+    }
+
+    // Function to start the game
+    function startGame() {
+      if (gameStarted) return
+      gameStarted = true
+      bird.paused = false
+      startPrompt.destroy()
+
+      wait(2, () => {
+        loop(1, () => spawnPipe())
+      })
+    }
+
+    // Core Loops & Updates
+    onUpdate(() => {
+      // Bird Animation (always runs, even before game starts)
+      bird.animTimer += dt()
+      if (bird.animTimer >= ANIM_SPEED) {
+        bird.animTimer = 0
+        bird.animFrame = (bird.animFrame + 1) % birdFrames.length
+        bird.use(sprite(birdFrames[bird.animFrame]!))
+      }
+
+      // Scroll Base (always runs, even before game starts)
+      const scrollSpeed = gameStarted ? currentSpeed : 160 // Slower scroll before game starts
+      base1.pos.x -= scrollSpeed * dt()
+      base2.pos.x -= scrollSpeed * dt()
+      if (base1.pos.x <= -base1.width) base1.pos.x = base2.pos.x + base2.width
+      if (base2.pos.x <= -base2.width) base2.pos.x = base1.pos.x + base1.width
+
+      if (!gameStarted) return // Don't update other game logic until started
+
+      // 1. Increase Difficulty
+      currentSpeed = Math.min(MAX_SPEED, currentSpeed + SPEED_ACCEL * dt())
+
+      // 2. Boundary Check
+      if (bird.pos.y >= height() - FLOOR_HEIGHT || bird.pos.y <= CEILING) {
+        go('lose', score)
+      }
     })
 
-    // Load all three bird animation frames
-    loadSprite('bird-down', '/bluebird-downflap.png')
-    loadSprite('bird-mid', '/bluebird-midflap.png')
-    loadSprite('bird-up', '/bluebird-upflap.png')
-
-    loadSprite('background-day', '/background-day.png')
-    loadSprite('coin', '/coin.png')
-    loadSprite('pipe', '/pipe-green.png')
-    loadSprite('base', '/base.png')
-
-    loadSound('score', '/point.ogg')
-    loadSound('wooosh', '/swoosh.ogg')
-    loadSound('hit', '/hit.ogg')
-
-    setGravity(3200)
-
-    scene('game', () => {
-      const PIPE_OPEN = 180
-      const JUMP_FORCE = 800
-      let speed = 320
-      const MAX_SPEED = 640
-      const SPEED_INCREASE = 8
-
-      const CEILING = -60
-      const PIPE_HEIGHT = 320
-
-      const bgOriginalWidth = 288
-      const bgOriginalHeight = 512
-      const bgScaleY = height() / bgOriginalHeight
-      const bgScaledWidth = bgOriginalWidth * bgScaleY
-      const numBackgrounds = Math.ceil(width() / bgScaledWidth) + 1
-
-      for (let i = 0; i < numBackgrounds; i++) {
-        add([sprite('background-day'), pos(i * bgScaledWidth, 0), scale(bgScaleY), fixed(), z(-1)])
-      }
-
-      const bean = add([
-        sprite('bird-mid'), // Start with mid frame
-        pos(width() / 4, 0),
-        area(),
-        body(),
-        {
-          animFrame: 0,
-          animTimer: 0,
-        },
-      ])
-
-      // Animate bird wings
-      const ANIM_SPEED = 0.1 // Seconds per frame
-      const birdFrames = ['bird-down', 'bird-mid', 'bird-up', 'bird-mid']
-
-      bean.onUpdate(() => {
-        // Wing animation
-        bean.animTimer += dt()
-        if (bean.animTimer >= ANIM_SPEED) {
-          bean.animTimer = 0
-          bean.animFrame = (bean.animFrame + 1) % birdFrames.length
-          bean.use(sprite(birdFrames[bean.animFrame]!))
-        }
-
-        // Death check
-        if (bean.pos.y >= height() || bean.pos.y <= CEILING) {
-          go('lose', score)
-        }
-      })
-
-      onKeyPress('space', () => {
-        bean.jump(JUMP_FORCE)
-        play('wooosh')
-      })
-
-      onGamepadButtonPress('south', () => {
-        bean.jump(JUMP_FORCE)
-        play('wooosh')
-      })
-
-      onClick(() => {
-        bean.jump(JUMP_FORCE)
-        play('wooosh')
-      })
-
-      function spawnPipe() {
-        // Calculate the random position for the bottom of the top pipe
-        // We want a range between 140 and 320 to prevent "floating" pipes
-        // 140 = (Screen Height - Pipe Height - Gap)
-        // 320 = (Pipe Height)
-        const minPipePos = height() - PIPE_HEIGHT - PIPE_OPEN // 140
-        const maxPipePos = PIPE_HEIGHT // 320
-
-        // rand(min, max) picks a random number between the two
-        const pipePos = rand(minPipePos, maxPipePos)
-
-        // Top Pipe
-        add([
-          sprite('pipe', { flipY: true }),
-          // Position: pipePos minus the height of the image lifts it up correctly
-          pos(width(), pipePos - PIPE_HEIGHT),
-          area(),
-          move(LEFT, speed),
-          offscreen({ destroy: true }),
-          'pipe',
-        ])
-
-        // Bottom Pipe
-        add([
-          sprite('pipe'),
-          // Position: pipePos plus the gap size
-          pos(width(), pipePos + PIPE_OPEN),
-          area(),
-          move(LEFT, speed),
-          // offscreen({ destroy: true }),
-          'pipe',
-          { passed: false },
-        ])
-      }
-
-      bean.onCollide('pipe', () => {
-        go('lose', score)
-        play('hit')
-        addKaboom(bean.pos)
-      })
-
-      onUpdate('pipe', (p) => {
-        if (p.pos.x + p.width <= bean.pos.x && p.passed === false) {
-          addScore()
-          p.passed = true
-        }
-      })
-
-      onUpdate(() => {
-        speed = Math.min(MAX_SPEED, speed + SPEED_INCREASE * dt())
-      })
-
-      loop(1, () => {
-        spawnPipe()
-      })
-
-      let score = 0
-
-      const scoreLabel = add([
-        text(score.toString()),
-        anchor('center'),
-        pos(width() / 2, 80),
-        fixed(),
-        z(100),
-      ])
-
-      function addScore() {
+    // Scoring
+    onUpdate('pipe', (p) => {
+      if (p.passed === false && p.pos.x + p.width <= bird.pos.x) {
         score++
         scoreLabel.text = score.toString()
+        p.passed = true
         play('score')
       }
     })
 
-    scene('lose', (score) => {
-      const bgOriginalWidth = 288
-      const bgOriginalHeight = 512
-      const bgScaleY = height() / bgOriginalHeight
-      const bgScaledWidth = bgOriginalWidth * bgScaleY
-      const numBackgrounds = Math.ceil(width() / bgScaledWidth) + 1
-
-      for (let i = 0; i < numBackgrounds; i++) {
-        add([sprite('background-day'), pos(i * bgScaledWidth, 0), scale(bgScaleY), fixed(), z(-1)])
+    // Input & Collisions
+    const jump = () => {
+      if (!gameStarted) {
+        startGame()
       }
+      bird.jump(JUMP_FORCE)
+      play('wooosh')
+    }
 
-      add([sprite('bird-mid'), pos(width() / 2, height() / 2 - 108), scale(3), anchor('center')])
+    onKeyPress('space', jump)
+    onClick(jump)
+    onGamepadButtonPress('south', jump)
 
-      add([
-        text(score ?? 'Welcome'),
-        pos(width() / 2, height() / 2 + 108),
-        scale(3),
-        anchor('center'),
-      ])
-
-      onKeyPress('space', () => go('game'))
-      onClick(() => go('game'))
+    bird.onCollide('pipe', () => {
+      play('hit')
+      go('lose', score)
     })
 
-    go('lose')
-  }
+    bird.onCollide('base', () => {
+      play('hit')
+      go('lose', score)
+    })
+  })
+
+  const { show, addEventListener } = useAdsgram({
+    blockId: 'int-20792',
+    onReward: (): void => {
+      go('game')
+    },
+  })
+
+  addEventListener('onBannerNotFound', () => {
+    console.log('Banner not found')
+  })
+
+  // --- Lose Scene ---
+  scene('lose', (score) => {
+    createTiledBackground()
+
+    // Add tiled static base
+    const FLOOR_HEIGHT = 112
+    const baseWidth = 336
+    const numBases = Math.ceil(width() / baseWidth) + 1
+
+    for (let i = 0; i < numBases; i++) {
+      add([sprite('base'), pos(i * baseWidth, height() - FLOOR_HEIGHT), z(10)])
+    }
+
+    add([
+      sprite('bird-mid'),
+      pos(width() / 2, height() / 2 - 100),
+      scale(2),
+      anchor('center'),
+      z(20),
+    ])
+
+    add([
+      text(score !== undefined ? `Score: ${score}` : 'FLAPPY KABOOM'),
+      pos(width() / 2, height() / 2 + 50),
+      anchor('center'),
+      z(20),
+    ])
+
+    // Start Button
+    const startButton = add([
+      rect(160, 50, { radius: 8 }),
+      pos(width() / 2, height() / 2 + 140),
+      anchor('center'),
+      color(76, 175, 80),
+      area(),
+      z(20),
+      'startButton',
+    ])
+
+    add([
+      text('START', { size: 24 }),
+      pos(width() / 2, height() / 2 + 140),
+      anchor('center'),
+      color(255, 255, 255),
+      z(21),
+    ])
+
+    // Button hover effect
+    startButton.onHoverUpdate(() => {
+      startButton.color = rgb(102, 187, 106)
+      setCursor('pointer')
+    })
+
+    startButton.onHoverEnd(() => {
+      startButton.color = rgb(76, 175, 80)
+      setCursor('default')
+    })
+
+    // Button click
+    startButton.onClick(() => {
+      show()
+    })
+
+    onKeyPress('space', () => go('game'))
+  })
+
+  go('lose')
 })
 </script>
 
 <template>
-  <div class="wrapper">
+  <div class="game-container">
     <canvas ref="canvas"></canvas>
-    <div class="base"></div>
   </div>
 </template>
 
-<style>
-.wrapper {
+<style scoped>
+.game-container {
   width: 100vw;
   height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #000;
+  background-color: #111;
+  overflow: hidden;
 }
 
 canvas {
-  display: block;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 </style>

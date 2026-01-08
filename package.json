@@ -16,6 +16,7 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@adsgram/vue": "^1.0.2",
     "kaboom": "^3000.1.17",
     "kaplay": "^3001.0.19",
     "pinia": "^3.0.4",
