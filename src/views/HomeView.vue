@@ -212,7 +212,7 @@ onMounted(() => {
     bird.onCollide('base', () => {
       play('hit')
       go('lose', score)
-      addKaboom(bird.pos)
+      addKaboom(bird.pos).z = 100
     })
   })
 
