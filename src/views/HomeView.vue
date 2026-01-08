@@ -215,9 +215,10 @@ onMounted(() => {
   })
 
   const { show, addEventListener } = useAdsgram({
-    blockId: 'int-20792',
+    blockId: '20793',
     onReward: (): void => {
       go('game')
+      console.log('Hello!')
     },
   })
 
