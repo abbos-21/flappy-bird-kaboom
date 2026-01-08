@@ -108,6 +108,7 @@ section {
 body {
   line-height: 1;
   overflow: hidden;
+  background-color: #000;
 }
 ol,
 ul {

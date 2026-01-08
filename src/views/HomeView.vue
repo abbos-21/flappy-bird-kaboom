@@ -7,26 +7,43 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 onMounted(() => {
   if (canvas.value) {
     // Calculate the scale to fit the width or height
+    // const kWidth = 360
+    // const kHeight = 640
+
+    // const scaleFactor = Math.min(window.innerWidth / kWidth, window.innerHeight / kHeight)
+
+    // kaboom({
+    //   width: kWidth,
+    //   height: kHeight,
+    //   scale: scaleFactor, // <--- Scale based on window size
+    //   canvas: canvas.value,
+    // })
+
     const kWidth = 360
     const kHeight = 640
 
-    const scaleFactor = Math.min(window.innerWidth / kWidth, window.innerHeight / kHeight)
+    // REMOVE THIS:
+    // const scaleFactor = Math.min(window.innerWidth / kWidth, window.innerHeight / kHeight)
 
     kaboom({
       width: kWidth,
       height: kHeight,
-      scale: scaleFactor, // <--- Scale based on window size
+      letterbox: true, // <--- This scales the canvas to fit window automatically
       canvas: canvas.value,
+      // Optional: Set background to black to hide "letterbox" bars visually
+      background: [0, 0, 0],
     })
 
     // Load all three bird animation frames
-    loadSprite('bird-down', '/redbird-downflap.png')
-    loadSprite('bird-mid', '/redbird-midflap.png')
-    loadSprite('bird-up', '/redbird-upflap.png')
+    loadSprite('bird-down', '/bluebird-downflap.png')
+    loadSprite('bird-mid', '/bluebird-midflap.png')
+    loadSprite('bird-up', '/bluebird-upflap.png')
 
     loadSprite('background-day', '/background-day.png')
     loadSprite('coin', '/coin.png')
     loadSprite('pipe', '/pipe-green.png')
+    loadSprite('base', '/base.png')
+
     loadSound('score', '/point.ogg')
     loadSound('wooosh', '/swoosh.ogg')
     loadSound('hit', '/hit.ogg')
@@ -201,12 +218,23 @@ onMounted(() => {
 </script>
 
 <template>
-  <canvas ref="canvas"></canvas>
+  <div class="wrapper">
+    <canvas ref="canvas"></canvas>
+    <div class="base"></div>
+  </div>
 </template>
 
 <style>
+.wrapper {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #000;
+}
+
 canvas {
-  border: 2px solid #543847;
-  border: 2px solid #543847;
+  display: block;
 }
 </style>
