@@ -288,7 +288,7 @@ onMounted(() => {
 
     // Button click
     startButton.onClick(() => {
-      show()
+      go('game')
     })
 
     onKeyPress('space', () => go('game'))
