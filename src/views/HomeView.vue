@@ -6,9 +6,16 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 
 onMounted(() => {
   if (canvas.value) {
+    // Calculate the scale to fit the width or height
+    const kWidth = 360
+    const kHeight = 640
+
+    const scaleFactor = Math.min(window.innerWidth / kWidth, window.innerHeight / kHeight)
+
     kaboom({
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: kWidth,
+      height: kHeight,
+      scale: scaleFactor, // <--- Scale based on window size
       canvas: canvas.value,
     })
 
@@ -19,6 +26,7 @@ onMounted(() => {
 
     loadSprite('background-day', '/background-day.png')
     loadSprite('coin', '/coin.png')
+    loadSprite('pipe', '/pipe-green.png')
     loadSound('score', '/point.ogg')
     loadSound('wooosh', '/swoosh.ogg')
     loadSound('hit', '/hit.ogg')
@@ -27,10 +35,13 @@ onMounted(() => {
 
     scene('game', () => {
       const PIPE_OPEN = 180
-      const PIPE_MIN = 60
       const JUMP_FORCE = 800
-      const SPEED = 320
+      let speed = 320
+      const MAX_SPEED = 640
+      const SPEED_INCREASE = 8
+
       const CEILING = -60
+      const PIPE_HEIGHT = 320
 
       const bgOriginalWidth = 288
       const bgOriginalHeight = 512
@@ -88,62 +99,37 @@ onMounted(() => {
       })
 
       function spawnPipe() {
-        const h1 = rand(PIPE_MIN, height() - PIPE_MIN - PIPE_OPEN)
-        const h2 = height() - h1 - PIPE_OPEN
-        const CAP_W = 52
-        const CAP_H = 24
-        const BODY_W = 48
+        // Calculate the random position for the bottom of the top pipe
+        // We want a range between 140 and 320 to prevent "floating" pipes
+        // 140 = (Screen Height - Pipe Height - Gap)
+        // 320 = (Pipe Height)
+        const minPipePos = height() - PIPE_HEIGHT - PIPE_OPEN // 140
+        const maxPipePos = PIPE_HEIGHT // 320
 
-        // --- TOP PIPE ---
-        const pipeTop = add([
-          pos(width(), 0),
-          area({ shape: new Rect(vec2(0, 0), CAP_W, h1) }),
-          move(LEFT, SPEED),
+        // rand(min, max) picks a random number between the two
+        const pipePos = rand(minPipePos, maxPipePos)
+
+        // Top Pipe
+        add([
+          sprite('pipe', { flipY: true }),
+          // Position: pipePos minus the height of the image lifts it up correctly
+          pos(width(), pipePos - PIPE_HEIGHT),
+          area(),
+          move(LEFT, speed),
           offscreen({ destroy: true }),
           'pipe',
         ])
 
-        // Top Body (Centered)
-        pipeTop.add([
-          rect(BODY_W, h1 - CAP_H),
-          pos(2, 0),
-          color(0, 183, 219),
-          outline(1, rgb(84, 56, 71)),
-        ])
-
-        // Top Cap (At the bottom of the top pipe)
-        pipeTop.add([
-          rect(CAP_W, CAP_H),
-          pos(0, h1 - CAP_H),
-          color(0, 183, 219),
-          outline(1, rgb(84, 56, 71)),
-        ])
-
-        // --- BOTTOM PIPE ---
-        const pipeBottom = add([
-          pos(width(), h1 + PIPE_OPEN),
-          // Area covers the full width of the cap and total height
-          area({ shape: new Rect(vec2(0, 0), CAP_W, CAP_H + h2) }),
-          move(LEFT, SPEED),
-          offscreen({ destroy: true }),
+        // Bottom Pipe
+        add([
+          sprite('pipe'),
+          // Position: pipePos plus the gap size
+          pos(width(), pipePos + PIPE_OPEN),
+          area(),
+          move(LEFT, speed),
+          // offscreen({ destroy: true }),
           'pipe',
           { passed: false },
-        ])
-
-        // Bottom Cap
-        pipeBottom.add([
-          rect(CAP_W, CAP_H),
-          pos(0, 0),
-          color(0, 183, 219),
-          outline(1, rgb(84, 56, 71)),
-        ])
-
-        // Bottom Body (Centered: (52 - 48) / 2 = 2px offset)
-        pipeBottom.add([
-          rect(BODY_W, h2),
-          pos(2, CAP_H),
-          color(0, 183, 219),
-          outline(1, rgb(84, 56, 71)),
         ])
       }
 
@@ -153,22 +139,15 @@ onMounted(() => {
         addKaboom(bean.pos)
       })
 
-      // onUpdate('pipe', (p) => {
-      //   if (p.pos.x + p.width <= bean.pos.x && p.passed === false) {
-      //     addScore()
-      //     p.passed = true
-      //   }
-      // })
-
       onUpdate('pipe', (p) => {
-        // Only check pipes that have the 'passed' property (the bottom pipes)
-        if (p.passed === false) {
-          // Use the actual constant CAP_W (52) since p.width is undefined
-          if (p.pos.x + 52 <= bean.pos.x) {
-            addScore()
-            p.passed = true
-          }
+        if (p.pos.x + p.width <= bean.pos.x && p.passed === false) {
+          addScore()
+          p.passed = true
         }
+      })
+
+      onUpdate(() => {
+        speed = Math.min(MAX_SPEED, speed + SPEED_INCREASE * dt())
       })
 
       loop(1, () => {
@@ -224,3 +203,9 @@ onMounted(() => {
 <template>
   <canvas ref="canvas"></canvas>
 </template>
+
+<style>
+canvas {
+  border-bottom: 2px solid #543847;
+}
+</style>
