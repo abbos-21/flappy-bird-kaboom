@@ -206,6 +206,7 @@ onMounted(() => {
 
 <style>
 canvas {
-  border-bottom: 2px solid #543847;
+  border: 2px solid #543847;
+  border: 2px solid #543847;
 }
 </style>
