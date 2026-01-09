@@ -1,24 +1,26 @@
-import { init } from '@tma.js/sdk-vue'
-init()
-import { syncAuth } from './services/authService'
-import { initData } from '@tma.js/sdk-vue'
-
-import './assets/main.css'
 import { createApp } from 'vue'
-syncAuth()
-  .catch(() => {
-    console.warn('Telegram auth failed')
-  })
-  .finally(() => {
-    app.mount('#app')
-    console.log(initData.restore())
-  })
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import { init } from '@tma.js/sdk-vue'
+import { syncAuth } from './services/authService'
+
+import './assets/main.css'
 import 'kaboom/global'
 
-const app = createApp(App)
-app.use(createPinia())
-app.use(router)
-app.mount('#app')
+async function bootstrap() {
+  init()
+
+  try {
+    await syncAuth()
+  } catch (e) {
+    console.warn('Telegram auth failed', e)
+  }
+
+  const app = createApp(App)
+  app.use(createPinia())
+  app.use(router)
+  app.mount('#app')
+}
+
+bootstrap()

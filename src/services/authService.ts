@@ -1,7 +1,9 @@
 import api from '@/lib/api'
-import { initData } from '@tma.js/sdk-vue'
+import { retrieveLaunchParams } from '@tma.js/sdk'
 
 export async function syncAuth() {
+  const { initData } = retrieveLaunchParams()
+
   if (!initData) {
     throw new Error('Telegram initData not available')
   }
