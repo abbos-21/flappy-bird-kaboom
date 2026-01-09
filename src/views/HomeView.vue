@@ -291,7 +291,7 @@ onMounted(() => {
       go('game')
     })
 
-    onKeyPress('space', () => go('game'))
+    onKeyPress('space', () => show())
   })
 
   go('lose')
