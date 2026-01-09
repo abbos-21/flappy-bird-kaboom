@@ -11,7 +11,7 @@ syncAuth()
   })
   .finally(() => {
     app.mount('#app')
-    console.log(initData)
+    console.log(initData.restore())
   })
 import { createPinia } from 'pinia'
 import App from './App.vue'
