@@ -2,14 +2,15 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
-import { init } from '@tma.js/sdk-vue'
+// import { init } from '@tma.js/sdk-vue'
 import { syncAuth } from './services/authService'
+import WebApp from '@twa-dev/sdk'
 
 import './assets/main.css'
 import 'kaboom/global'
 
 async function bootstrap() {
-  init()
+  WebApp.ready()
 
   try {
     await syncAuth()

@@ -19,6 +19,7 @@
   "dependencies": {
     "@adsgram/vue": "^1.0.2",
     "@tma.js/sdk-vue": "^1.0.15",
+    "@twa-dev/sdk": "^8.0.2",
     "axios": "^1.13.2",
     "kaboom": "^3000.1.17",
     "kaplay": "^3001.0.19",
