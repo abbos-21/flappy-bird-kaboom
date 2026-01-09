@@ -1,6 +1,7 @@
 import { init } from '@tma.js/sdk-vue'
 init()
 import { syncAuth } from './services/authService'
+import { initData } from '@tma.js/sdk-vue'
 
 import './assets/main.css'
 import { createApp } from 'vue'
@@ -10,6 +11,7 @@ syncAuth()
   })
   .finally(() => {
     app.mount('#app')
+    console.log(initData)
   })
 import { createPinia } from 'pinia'
 import App from './App.vue'
