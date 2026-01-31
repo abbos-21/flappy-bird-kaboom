@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 // import { init } from '@tma.js/sdk-vue'
-import { syncAuth } from './services/authService'
+import { syncAuth } from '@/services/authService'
 import WebApp from '@twa-dev/sdk'
 
 import './assets/main.css'
