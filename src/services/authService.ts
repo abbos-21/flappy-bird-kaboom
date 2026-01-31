@@ -1,10 +1,10 @@
 import api from '@/lib/api'
 // import { retrieveLaunchParams } from '@tma.js/sdk'
-// import WebApp from '@twa-dev/sdk'
+import WebApp from '@twa-dev/sdk'
 
 export async function syncAuth() {
-  // const initData = WebApp.initData
-  const initData = null
+  const initData = WebApp.initData
+  // const initData = null
 
   if (!initData) {
     throw new Error('Telegram initData not available')
