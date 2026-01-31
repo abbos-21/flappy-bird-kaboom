@@ -21,7 +21,9 @@ onMounted(() => {
   loadSprite('bird-mid', '/bluebird-midflap.png')
   loadSprite('bird-up', '/bluebird-upflap.png')
   loadSprite('background-day', '/background-day.png')
+  loadSprite('background-night', '/background-night.png')
   loadSprite('pipe', '/pipe-green.png')
+  loadSprite('pipe-red', '/pipe-red.png')
   loadSprite('base', '/base.png')
 
   loadSound('score', '/point.ogg')
@@ -35,23 +37,45 @@ onMounted(() => {
     const bgScale = height() / bgHeight
     const numBgs = Math.ceil(width() / (bgWidth * bgScale)) + 1
 
+    const dayLayers = []
+    const nightLayers = []
+
     for (let i = 0; i < numBgs; i++) {
-      add([
-        sprite('background-day'),
-        pos(i * (bgWidth * bgScale), 0),
-        scale(bgScale),
-        fixed(),
-        z(-1),
-      ])
+      // Night Layer (Behind, initially transparent)
+      nightLayers.push(
+        add([
+          sprite('background-night'),
+          pos(i * (bgWidth * bgScale), 0),
+          scale(bgScale),
+          fixed(),
+          z(-2),
+          opacity(0),
+        ]),
+      )
+
+      // Day Layer (In front, initially visible)
+      dayLayers.push(
+        add([
+          sprite('background-day'),
+          pos(i * (bgWidth * bgScale), 0),
+          scale(bgScale),
+          fixed(),
+          z(-1),
+          opacity(1),
+        ]),
+      )
     }
+    return { dayLayers, nightLayers }
   }
 
   // --- Game Scene ---
   scene('game', () => {
     setGravity(3200)
     let score = 0
-    let currentSpeed = 320
-    let gameStarted = false // Add this flag
+    let currentSpeed = 100
+    let gameStarted = false
+    let isGameOver = false
+    let isNight = false // State tracker for day/night
 
     // Configuration
     const JUMP_FORCE = 800
@@ -60,41 +84,37 @@ onMounted(() => {
     const FLOOR_HEIGHT = 112
     const CEILING = -60
     const MAX_SPEED = 640
-    const SPEED_ACCEL = 8
+    const SPEED_ACCEL = 0
     const ANIM_SPEED = 0.1
     const birdFrames = ['bird-down', 'bird-mid', 'bird-up', 'bird-mid']
 
-    createTiledBackground()
+    const backgrounds = createTiledBackground()
 
     // UI
-    const scoreLabel = add([text('0'), pos(width() / 2, 80), anchor('center'), fixed(), z(100)])
-
-    // Add start prompt
+    const scoreLabel = add([text('0'), pos(width() / 2, 80), anchor('center'), fixed(), z(30)])
     const startPrompt = add([
       text('Press Space or Click to Start', { size: 20 }),
-      pos(width() / 2, height() / 2 + 100),
+      pos(width() / 2, height() / 2),
       anchor('center'),
       fixed(),
-      z(100),
+      z(30),
     ])
 
     // Player
     const bird = add([
       sprite('bird-mid'),
       pos(width() / 4, (height() - FLOOR_HEIGHT) / 2),
-      area(),
+      area({ scale: 0.8 }),
       body(),
+      rotate(0),
+      anchor('center'),
       z(20),
-      {
-        animFrame: 0,
-        animTimer: 0,
-      },
+      { animFrame: 0, animTimer: 0 },
     ])
 
-    // Disable gravity until game starts
     bird.paused = true
 
-    // Scrolling Floor (Base)
+    // Floor
     const base1 = add([
       sprite('base'),
       pos(0, height() - FLOOR_HEIGHT),
@@ -113,87 +133,152 @@ onMounted(() => {
       'base',
     ])
 
+    // Theme Switcher Logic
+    function updateTheme() {
+      // Toggles every 10 points
+      const shouldBeNight = Math.floor(score / 10) % 2 !== 0
+
+      if (shouldBeNight !== isNight) {
+        isNight = shouldBeNight
+
+        // Change the sprite for all pipes currently in the game world
+        const newPipeSprite = isNight ? 'pipe-red' : 'pipe'
+        setTimeout(() => {
+          get('pipe').forEach((p) => {
+            // p.flipY preserves whether the pipe was a top (flipped) or bottom pipe
+            p.use(sprite(newPipeSprite, { flipY: p.flipY }))
+          })
+        }, 750)
+
+        // Background cross-fade
+        if (backgrounds.nightLayers[0]) {
+          tween(
+            backgrounds.nightLayers[0].opacity,
+            isNight ? 1 : 0,
+            1.5,
+            (v) => {
+              backgrounds.nightLayers.forEach((bg) => (bg.opacity = v))
+              backgrounds.dayLayers.forEach((bg) => (bg.opacity = 1 - v))
+            },
+            easings.easeInOutQuad,
+          )
+        }
+      }
+    }
+
     // Pipes Logic
     function spawnPipe() {
+      if (isGameOver) return
+
       const minPipePos = height() - FLOOR_HEIGHT - PIPE_HEIGHT - PIPE_OPEN / 2
       const maxPipePos = PIPE_HEIGHT
       const pipePos = rand(minPipePos, maxPipePos)
 
+      // Use red pipes if currently night mode
+      const pipeSprite = isNight ? 'pipe-red' : 'pipe'
+
       add([
-        sprite('pipe', { flipY: true }),
+        sprite(pipeSprite, { flipY: true }),
         pos(width(), pipePos - PIPE_HEIGHT),
         area(),
         move(LEFT, currentSpeed),
         offscreen({ destroy: true }),
-        z(0),
+        z(5),
         'pipe',
       ])
 
       add([
-        sprite('pipe'),
+        sprite(pipeSprite),
         pos(width(), pipePos + PIPE_OPEN),
         area(),
         move(LEFT, currentSpeed),
-        z(0),
+        z(5),
         'pipe',
         { passed: false },
       ])
     }
 
-    // Function to start the game
     function startGame() {
-      if (gameStarted) return
+      if (gameStarted || isGameOver) return
       gameStarted = true
       bird.paused = false
       startPrompt.destroy()
+      bird.jump(JUMP_FORCE)
+      play('wooosh')
 
       wait(2, () => {
-        loop(1, () => spawnPipe())
+        if (!isGameOver) {
+          loop(1.5, () => spawnPipe())
+        }
       })
     }
 
-    // Core Loops & Updates
+    function crash() {
+      if (isGameOver) return
+      isGameOver = true
+      play('hit')
+      addKaboom(bird.pos).z = 30
+      bird.paused = true
+      get('pipe').forEach((p) => {
+        p.paused = true
+      })
+      wait(0.75, () => {
+        go('lose', score)
+      })
+    }
+
     onUpdate(() => {
-      // Bird Animation (always runs, even before game starts)
-      bird.animTimer += dt()
-      if (bird.animTimer >= ANIM_SPEED) {
-        bird.animTimer = 0
-        bird.animFrame = (bird.animFrame + 1) % birdFrames.length
-        bird.use(sprite(birdFrames[bird.animFrame]!))
+      if (!isGameOver) {
+        const scrollSpeed = gameStarted ? currentSpeed : 100
+        base1.pos.x -= scrollSpeed * dt()
+        base2.pos.x -= scrollSpeed * dt()
+        if (base1.pos.x <= -base1.width) base1.pos.x = base2.pos.x + base2.width
+        if (base2.pos.x <= -base2.width) base2.pos.x = base1.pos.x + base1.width
       }
 
-      // Scroll Base (always runs, even before game starts)
-      const scrollSpeed = gameStarted ? currentSpeed : 160 // Slower scroll before game starts
-      base1.pos.x -= scrollSpeed * dt()
-      base2.pos.x -= scrollSpeed * dt()
-      if (base1.pos.x <= -base1.width) base1.pos.x = base2.pos.x + base2.width
-      if (base2.pos.x <= -base2.width) base2.pos.x = base1.pos.x + base1.width
+      if (!gameStarted || isGameOver) return
 
-      if (!gameStarted) return // Don't update other game logic until started
+      // Rotation Logic
+      if (bird.vel.y < 0) {
+        bird.angle = -35
+      } else if (bird.angle < 90) {
+        bird.angle += 350 * dt()
+      }
 
-      // 1. Increase Difficulty
+      // Animation Logic
+      if (bird.angle < 45) {
+        bird.animTimer += dt()
+        if (bird.animTimer >= ANIM_SPEED) {
+          bird.animTimer = 0
+          bird.animFrame = (bird.animFrame + 1) % birdFrames.length
+          bird.use(sprite(birdFrames[bird.animFrame]!))
+        }
+      } else {
+        bird.use(sprite('bird-mid'))
+      }
+
       currentSpeed = Math.min(MAX_SPEED, currentSpeed + SPEED_ACCEL * dt())
 
-      // 2. Boundary Check
       if (bird.pos.y >= height() - FLOOR_HEIGHT || bird.pos.y <= CEILING) {
-        go('lose', score)
+        crash()
       }
     })
 
-    // Scoring
     onUpdate('pipe', (p) => {
-      if (p.passed === false && p.pos.x + p.width <= bird.pos.x) {
+      if (!isGameOver && p.passed === false && p.pos.x + p.width <= bird.pos.x) {
         score++
         scoreLabel.text = score.toString()
         p.passed = true
         play('score')
+        updateTheme() // Check for day/night toggle
       }
     })
 
-    // Input & Collisions
     const jump = () => {
+      if (isGameOver) return
       if (!gameStarted) {
         startGame()
+        return
       }
       bird.jump(JUMP_FORCE)
       play('wooosh')
@@ -203,24 +288,14 @@ onMounted(() => {
     onClick(jump)
     onGamepadButtonPress('south', jump)
 
-    bird.onCollide('pipe', () => {
-      play('hit')
-      go('lose', score)
-      addKaboom(bird.pos).z = 100
-    })
-
-    bird.onCollide('base', () => {
-      play('hit')
-      go('lose', score)
-      addKaboom(bird.pos).z = 100
-    })
+    bird.onCollide('pipe', crash)
+    bird.onCollide('base', crash)
   })
 
   const { show, addEventListener } = useAdsgram({
     blockId: '20793',
     onReward: (): void => {
       go('game')
-      console.log('Hello!')
     },
   })
 
@@ -231,8 +306,6 @@ onMounted(() => {
   // --- Lose Scene ---
   scene('lose', (score) => {
     createTiledBackground()
-
-    // Add tiled static base
     const FLOOR_HEIGHT = 112
     const baseWidth = 336
     const numBases = Math.ceil(width() / baseWidth) + 1
@@ -256,7 +329,6 @@ onMounted(() => {
       z(20),
     ])
 
-    // Start Button
     const startButton = add([
       rect(160, 50, { radius: 8 }),
       pos(width() / 2, height() / 2 + 140),
@@ -272,10 +344,9 @@ onMounted(() => {
       pos(width() / 2, height() / 2 + 140),
       anchor('center'),
       color(255, 255, 255),
-      z(21),
+      z(30),
     ])
 
-    // Button hover effect
     startButton.onHoverUpdate(() => {
       startButton.color = rgb(102, 187, 106)
       setCursor('pointer')
@@ -286,11 +357,9 @@ onMounted(() => {
       setCursor('default')
     })
 
-    // Button click
     startButton.onClick(() => {
       go('game')
     })
-
     onKeyPress('space', () => show())
   })
 
