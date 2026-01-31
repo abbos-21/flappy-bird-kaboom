@@ -22,7 +22,7 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config
 
-    if (error.response?.status === 403 && !original._retry) {
+    if (error.response?.status === 401 && error.response?.status === 403 && !original._retry) {
       original._retry = true
 
       if (isRefreshing) {
