@@ -4,18 +4,23 @@ import WebApp from '@twa-dev/sdk'
 
 export async function syncAuth() {
   const initData = WebApp.initData
-  // const initData = null
 
   if (!initData) {
     throw new Error('Telegram initData not available')
   }
+
+  // Clear old tokens before syncing to ensure a fresh start
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
 
   const res = await api.post(
     '/auth/sync',
     {},
     {
       headers: {
-        Authorization: `tma ${initData}`,
+        // Use a custom header name if your backend supports it,
+        // or ensure Bearer isn't attached (fixed in api.ts above)
+        'Authorization': `tma ${initData}`,
       },
     },
   )
