@@ -26,7 +26,7 @@ export const gameService = {
     try {
       const res = await api.post('/game/end', {
         sessionId,
-        score
+        score,
       })
 
       if (res.data.valid) {
@@ -44,5 +44,5 @@ export const gameService = {
       console.error('Failed to submit score:', e)
       return { success: false, earned: 0 }
     }
-  }
+  },
 }

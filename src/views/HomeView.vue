@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import kaboom from 'kaboom'
 import { useAdsgram } from '@adsgram/vue'
 import { gameService } from '@/services/gameService' // [INTEGRATION]
-import { useUserStore } from '@/stores/user'         // [INTEGRATION]
+import { useUserStore } from '@/stores/user' // [INTEGRATION]
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const userStore = useUserStore() // [INTEGRATION] Access global user state
@@ -101,18 +101,8 @@ onMounted(async () => {
     const scoreLabel = add([text('0'), pos(width() / 2, 80), anchor('center'), fixed(), z(30)])
 
     // [INTEGRATION] Added User Stats to UI
-    add([
-        text(`Best: ${userStore.maxScore}`, { size: 16 }),
-        pos(10, 10),
-        fixed(),
-        z(30)
-    ])
-    add([
-        text(`Coins: ${userStore.coins}`, { size: 16 }),
-        pos(10, 30),
-        fixed(),
-        z(30)
-    ])
+    add([text(`Best: ${userStore.maxScore}`, { size: 16 }), pos(10, 10), fixed(), z(30)])
+    add([text(`Coins: ${userStore.coins}`, { size: 16 }), pos(10, 30), fixed(), z(30)])
 
     const startPrompt = add([
       text('Press Space or Click to Start', { size: 20 }),
@@ -222,9 +212,9 @@ onMounted(async () => {
       play('wooosh')
 
       // Optimistic Start: Start game visuals immediately, fetch session in background
-      gameService.startSession().then(id => {
+      gameService.startSession().then((id) => {
         currentSessionId = id
-        if (!id) console.error("Failed to start server session")
+        if (!id) console.error('Failed to start server session')
       })
 
       wait(2, () => {
@@ -363,7 +353,7 @@ onMounted(async () => {
       pos(width() / 2, height() / 2 + 90),
       anchor('center'),
       z(20),
-      color(255, 215, 0) // Gold color
+      color(255, 215, 0), // Gold color
     ])
 
     const startButton = add([

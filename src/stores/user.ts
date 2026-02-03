@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/lib/api'
+import WebApp from '@twa-dev/sdk'
 
 export const useUserStore = defineStore('user', () => {
   const coins = ref(0)
@@ -8,6 +9,13 @@ export const useUserStore = defineStore('user', () => {
   const firstName = ref('')
 
   async function sync() {
+    const initData = WebApp.initData
+    // const initData = null
+
+    if (!initData) {
+      throw new Error('Telegram initData not available')
+    }
+
     try {
       const { data } = await api.get('/game/sync')
       if (data.success) {
