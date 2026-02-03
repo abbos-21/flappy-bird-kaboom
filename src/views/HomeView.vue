@@ -2,10 +2,16 @@
 import { ref, onMounted } from 'vue'
 import kaboom from 'kaboom'
 import { useAdsgram } from '@adsgram/vue'
+import { gameService } from '@/services/gameService' // [INTEGRATION]
+import { useUserStore } from '@/stores/user'         // [INTEGRATION]
 
 const canvas = ref<HTMLCanvasElement | null>(null)
+const userStore = useUserStore() // [INTEGRATION] Access global user state
 
-onMounted(() => {
+onMounted(async () => {
+  // [INTEGRATION] Sync user data on load
+  await userStore.sync()
+
   if (!canvas.value) return
 
   kaboom({
@@ -41,7 +47,6 @@ onMounted(() => {
     const nightLayers = []
 
     for (let i = 0; i < numBgs; i++) {
-      // Night Layer (Behind, initially transparent)
       nightLayers.push(
         add([
           sprite('background-night'),
@@ -53,7 +58,6 @@ onMounted(() => {
         ]),
       )
 
-      // Day Layer (In front, initially visible)
       dayLayers.push(
         add([
           sprite('background-day'),
@@ -75,7 +79,10 @@ onMounted(() => {
     let currentSpeed = 100
     let gameStarted = false
     let isGameOver = false
-    let isNight = false // State tracker for day/night
+    let isNight = false
+
+    // [INTEGRATION] Session tracking
+    let currentSessionId: string | null = null
 
     // Configuration
     const JUMP_FORCE = 800
@@ -92,6 +99,21 @@ onMounted(() => {
 
     // UI
     const scoreLabel = add([text('0'), pos(width() / 2, 80), anchor('center'), fixed(), z(30)])
+
+    // [INTEGRATION] Added User Stats to UI
+    add([
+        text(`Best: ${userStore.maxScore}`, { size: 16 }),
+        pos(10, 10),
+        fixed(),
+        z(30)
+    ])
+    add([
+        text(`Coins: ${userStore.coins}`, { size: 16 }),
+        pos(10, 30),
+        fixed(),
+        z(30)
+    ])
+
     const startPrompt = add([
       text('Press Space or Click to Start', { size: 20 }),
       pos(width() / 2, height() / 2),
@@ -133,24 +155,18 @@ onMounted(() => {
       'base',
     ])
 
-    // Theme Switcher Logic
     function updateTheme() {
-      // Toggles every 10 points
       const shouldBeNight = Math.floor(score / 10) % 2 !== 0
 
       if (shouldBeNight !== isNight) {
         isNight = shouldBeNight
-
-        // Change the sprite for all pipes currently in the game world
         const newPipeSprite = isNight ? 'pipe-red' : 'pipe'
         setTimeout(() => {
           get('pipe').forEach((p) => {
-            // p.flipY preserves whether the pipe was a top (flipped) or bottom pipe
             p.use(sprite(newPipeSprite, { flipY: p.flipY }))
           })
         }, 750)
 
-        // Background cross-fade
         if (backgrounds.nightLayers[0]) {
           tween(
             backgrounds.nightLayers[0].opacity,
@@ -166,15 +182,12 @@ onMounted(() => {
       }
     }
 
-    // Pipes Logic
     function spawnPipe() {
       if (isGameOver) return
 
       const minPipePos = height() - FLOOR_HEIGHT - PIPE_HEIGHT - PIPE_OPEN / 2
       const maxPipePos = PIPE_HEIGHT
       const pipePos = rand(minPipePos, maxPipePos)
-
-      // Use red pipes if currently night mode
       const pipeSprite = isNight ? 'pipe-red' : 'pipe'
 
       add([
@@ -198,13 +211,21 @@ onMounted(() => {
       ])
     }
 
+    // [INTEGRATION] Updated Start Logic
     function startGame() {
       if (gameStarted || isGameOver) return
+
       gameStarted = true
       bird.paused = false
       startPrompt.destroy()
       bird.jump(JUMP_FORCE)
       play('wooosh')
+
+      // Optimistic Start: Start game visuals immediately, fetch session in background
+      gameService.startSession().then(id => {
+        currentSessionId = id
+        if (!id) console.error("Failed to start server session")
+      })
 
       wait(2, () => {
         if (!isGameOver) {
@@ -213,7 +234,8 @@ onMounted(() => {
       })
     }
 
-    function crash() {
+    // [INTEGRATION] Updated Crash Logic
+    async function crash() {
       if (isGameOver) return
       isGameOver = true
       play('hit')
@@ -222,6 +244,13 @@ onMounted(() => {
       get('pipe').forEach((p) => {
         p.paused = true
       })
+
+      // Send score to server immediately upon crash
+      if (currentSessionId) {
+        // We don't await here to keep UI responsive, we await in the lose scene or let it sync in bg
+        gameService.endSession(currentSessionId, score)
+      }
+
       wait(0.75, () => {
         go('lose', score)
       })
@@ -238,14 +267,12 @@ onMounted(() => {
 
       if (!gameStarted || isGameOver) return
 
-      // Rotation Logic
       if (bird.vel.y < 0) {
         bird.angle = -35
       } else if (bird.angle < 90) {
         bird.angle += 350 * dt()
       }
 
-      // Animation Logic
       if (bird.angle < 45) {
         bird.animTimer += dt()
         if (bird.animTimer >= ANIM_SPEED) {
@@ -270,7 +297,7 @@ onMounted(() => {
         scoreLabel.text = score.toString()
         p.passed = true
         play('score')
-        updateTheme() // Check for day/night toggle
+        updateTheme()
       }
     })
 
@@ -286,12 +313,13 @@ onMounted(() => {
 
     onKeyPress('space', jump)
     onClick(jump)
-    onGamepadButtonPress('south', jump)
+    onGamepadButtonPress('south', jump) // Keep gamepad support
 
     bird.onCollide('pipe', crash)
     bird.onCollide('base', crash)
   })
 
+  // [INTEGRATION] Adsgram Setup
   const { show, addEventListener } = useAdsgram({
     blockId: '20793',
     onReward: (): void => {
@@ -329,9 +357,18 @@ onMounted(() => {
       z(20),
     ])
 
+    // [INTEGRATION] Show Total Coins
+    add([
+      text(`Total Coins: ${userStore.coins}`, { size: 16 }),
+      pos(width() / 2, height() / 2 + 90),
+      anchor('center'),
+      z(20),
+      color(255, 215, 0) // Gold color
+    ])
+
     const startButton = add([
       rect(160, 50, { radius: 8 }),
-      pos(width() / 2, height() / 2 + 140),
+      pos(width() / 2, height() / 2 + 150), // Adjusted pos
       anchor('center'),
       color(76, 175, 80),
       area(),
@@ -341,7 +378,7 @@ onMounted(() => {
 
     add([
       text('START', { size: 24 }),
-      pos(width() / 2, height() / 2 + 140),
+      pos(width() / 2, height() / 2 + 150),
       anchor('center'),
       color(255, 255, 255),
       z(30),
@@ -360,6 +397,8 @@ onMounted(() => {
     startButton.onClick(() => {
       go('game')
     })
+
+    // [INTEGRATION] Press space to show Ad then restart
     onKeyPress('space', () => show())
   })
 
