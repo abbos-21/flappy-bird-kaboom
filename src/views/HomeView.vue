@@ -27,7 +27,7 @@ onMounted(() => {
   loadSprite('base', '/base.png')
 
   loadSound('score', '/point.ogg')
-  loadSound('wooosh', '/swoosh.ogg')
+  loadSound('wooosh', '/wing.ogg')
   loadSound('hit', '/hit.ogg')
 
   // --- Helpers ---
